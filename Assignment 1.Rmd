@@ -213,9 +213,9 @@ pge_residential_chart %>%
     xaxis = list(fixedrange = T),
     yaxis = list(fixedrange = T)
   ) %>% 
-  
   config(displayModeBar = F)
 ```
+Comments: It looks like both residential and commercial electricity usage stayed pretty constant in the last 6 months while gas usage has decreased significantly. However, it's hard to tell whether it's due to COVID or simply the seasons, since it follows a similar trend to previous years. If anything, energy usage is higher than at the same months in previous years.
 ```{r elec_before_and_after_covid}
 elec_before_covid <- 
   pge_elec %>% 
@@ -327,3 +327,10 @@ leaflet() %>%
   )
 
 ```
+Comments: It was difficult to get the legend right, since the range of increase/decrease in electricity usage is so wide. Generally, most zip codes decreased electricity usage between december 2019 and february 2020. 94544 decreased the most, while there was a spike right next to it in 94545.
+
+Assumptions made: 
+
+1) I made the assumption that covid started in january 2020. I used december 2019 and february 2020 to frame that month, as to highlight before and after the start of the pandemic. However, a better time frame would probably be when students left campus and places started shutting down, so like between february 2020 and april 2020.
+
+2) I also only included residential and commercial energy usage by PG&E, not other areas like agricultural use.
