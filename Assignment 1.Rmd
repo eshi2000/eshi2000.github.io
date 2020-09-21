@@ -280,9 +280,9 @@ bay_zips <-
   left_join(usa_zips %>% select(GEOID10)) %>% 
   st_as_sf()
 
-elec_combined_geo <-
+elec_combined_bay <-
   elec_combined %>%
-  left_join(
+  right_join(
     bay_zips %>% select(GEOID10),
     by = c("ZIPCODE" = "GEOID10")
   ) %>%
@@ -290,7 +290,7 @@ elec_combined_geo <-
   st_transform(projection)
 
 ## Make vector of colors for values smaller than 0 (20 colors)
-rc1 <- colorRampPalette(colors = c("red", "white"), space = "Lab")(400)
+rc1 <- colorRampPalette(colors = c("red", "white"), space = "Lab")(600)
 
 ## Make vector of colors for values larger than 0 (180 colors)
 rc2 <- colorRampPalette(colors = c("white", "blue"), space = "Lab")(1000)
@@ -298,12 +298,12 @@ rc2 <- colorRampPalette(colors = c("white", "blue"), space = "Lab")(1000)
 ## Combine the two color palettes
 rampcols <- c(rc1, rc2)
 
-mypal <- colorNumeric(palette = rampcols, domain = elec_combined_geo$CHANGE_KWH)
+mypal <- colorNumeric(palette = rampcols, domain = elec_combined_bay$CHANGE_KWH)
 
 leaflet() %>%
   addTiles() %>%
   addPolygons(
-    data = elec_combined_geo,
+    data = elec_combined_bay,
     fillColor = ~mypal(CHANGE_KWH),
     color = "white",
     opacity = 0.5,
@@ -320,7 +320,7 @@ leaflet() %>%
     )
   ) %>%
   addLegend(
-    data = elec_combined_geo,
+    data = elec_combined_bay,
     pal = mypal,
     values = ~CHANGE_KWH,
     title = "Change in kWh<br>between<br>12-2019 and 02-2020"
