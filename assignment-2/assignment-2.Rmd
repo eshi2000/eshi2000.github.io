@@ -17,7 +17,7 @@ library(tidyverse)
 library(tidycensus)
 
 census_api_key("c92c3c586ec2640e86f9d2e8d8b09b5a75f4ea16")
-Sys.setenv(CENSUS_KEY="c92c3c586ec2640e86f9d2e8d8b09b5a75f4ea16")
+Sys.setenv(CENSUS_KEY = "c92c3c586ec2640e86f9d2e8d8b09b5a75f4ea16")
 ```
 ```{r load_acs_data}
 acs_vars_2018_5yr <-
@@ -27,7 +27,10 @@ acs_vars_2018_5yr <-
   )
 educ_attain_vars <-
   acs_vars_2018_5yr %>%
-  filter(str_detect(concept, "EDUCATIONAL ATTAINMENT") & str_detect(concept, "GEOGRAPHICAL MOBILITY"))
+  filter(
+    str_detect(concept, "EDUCATIONAL ATTAINMENT") & 
+      str_detect(concept, "GEOGRAPHICAL MOBILITY")
+    )
 ```
 ```{r educ_race}
 census_race_labels <- c(
@@ -87,7 +90,9 @@ scc_educ_attain %>%
   geom_bar(
     aes(
       x = educational_attainment %>% 
-        factor(levels = rev(c("Total", scc_educ_attain$educational_attainment[1:4]))),
+        factor(
+          levels = 
+            rev(c("Total", scc_educ_attain$educational_attainment[1:4]))),
       y = estimate,
       fill = race
     ),
@@ -105,24 +110,58 @@ scc_educ_attain %>%
     legend.position = "bottom",
     legend.direction = "vertical"
   )
+
+scc_educ_attain %>%
+  group_by(educational_attainment, race) %>% 
+  summarize(estimate = sum(estimate)) %>%
+  rbind(scc_race_total) %>%
+  ggplot() +
+  geom_bar(
+    aes(
+      x = educational_attainment %>% 
+        factor(
+          levels = 
+            rev(c("Total", scc_educ_attain$educational_attainment[1:4]))),
+      y = estimate,
+      fill = race
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "Attainment Level",
+    y = "Proportion of People Over the Age of 25",
+    title = "Santa Clara County Educational Attainment by Race",
+    fill = "Race"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  )
 ```
 ```{r educ_attain_analysis}
-non_white_perc <- ((sum(scc_race_total$estimate[1:6])/sum(scc_race_total$estimate))*100) %>% round()
+non_white_perc <- 
+  ((sum(scc_race_total$estimate[1:6]) / 
+      sum(scc_race_total$estimate))*100) %>% round()
 less_hs_race <- 
   scc_educ_attain %>%
   filter(educational_attainment == "Less than high school diploma") %>%
   group_by(race) %>%
   summarize(estimate = sum(estimate)) 
 
-non_white_less_hs_perc <- ((sum(less_hs_race$estimate[1:6])/sum(less_hs_race$estimate))*100) %>% round()
+non_white_less_hs_perc <-  
+  ((sum(less_hs_race$estimate[1:6]) / 
+      sum(less_hs_race$estimate))*100) %>% round()
 
-non_white_less_hs_likelihood_than_expected <- (((non_white_less_hs_perc/non_white_perc)-1)*100) %>% round()
+non_white_less_hs_likelihood_than_expected <- 
+  (((non_white_less_hs_perc / non_white_perc) - 1) * 100) %>% round()
 ```
 
 Q: is there disproportionate education attainment by race in Santa Clara County?\    
 A: yes. Non-white population (over 25 yrs old) makes up 53% of the county, so if educational attainment were race blind, then we would expect to see 53% of non-white people in each educational attainment level. However, non-white people actually make up 63% of the "less than high school diploma" educational attainment level. This means that non_white people in Santa Clara County are 19% more likely to have an educational attainment level of "less than high school diploma" than we would expect.
 
-```{r equity_analysis_tests}
+```{r equity_analysis_tests, include = FALSE, eval = FALSE}
 # View(listCensusApis())
 # test_census <- 
 #   getCensus(
@@ -144,7 +183,7 @@ A: yes. Non-white population (over 25 yrs old) makes up 53% of the county, so if
 #     by = c("variable" = "name")
 #     )
 ```
-```{r load_pums_vars, eval = FALSE}
+```{r load_pums_vars, include = FALSE, eval = FALSE}
 # temp <- tempfile()
 # download.file("https://www2.census.gov/programs-surveys/acs/data/pums/2018/5-Year/csv_hca.zip", destfile = temp, mode = "wb")
 # 
@@ -193,8 +232,8 @@ scc_pumas <-
 scc_pums <-
   ca_pums %>% 
   filter(PUMA %in% scc_pumas$PUMACE10)
-```
 
+```
 ```{r pums_analysis}
 k_12_students <-
   scc_pums %>%
@@ -212,7 +251,7 @@ k_12_students <-
       PWGTP,
       0
     )
-  )
+  ) 
 
 total_num_k_12 = sum(k_12_students$PWGTP)
 num_has_internet = sum(k_12_students$has_internet)
@@ -222,6 +261,56 @@ perc_no_internet <- ((num_no_internet/total_num_k_12)*100) %>% round()
 
 ```
 The total number of k-12 students in Santa Clara County is 310,656. The number of these students with access to internet is 302,268. The number without access to internet is 8388. This makes 97% with access to internet and 3% without. My assumption is that the PWGTP represents population/number of people. The data shows in Santa Clara County, 97% of people will not have any problems with remote learning in 2020.
+```{r pums_map}
+k_12_students_pumas <-
+  k_12_students %>%
+  group_by(PUMA) %>%
+  summarize(
+    has_internet = sum(has_internet),
+    no_internet = sum(no_internet),
+    PWGTP = sum(PWGTP)
+  ) %>%
+  mutate(
+    perc_has_internet = has_internet/PWGTP*100
+  ) %>% 
+  left_join(
+    scc_pumas %>%
+      select(PUMACE10),
+    by = c("PUMA" = "PUMACE10")
+    ) %>%
+  st_as_sf()
+
+pums_pal <- colorNumeric(
+  palette = "Oranges",
+  domain = k_12_students_pumas$perc_has_internet
+)
+
+leaflet() %>%
+  addTiles() %>% 
+  addPolygons(
+    data = k_12_students_pumas,
+    fillColor = ~pums_pal(perc_has_internet),
+    color = "white",
+    opacity = 0.5,
+    fillOpacity = 0.5,
+    weight = 1,
+    label = ~paste0(
+      round(perc_has_internet), 
+      "% of individuals in K-12 schools have internet"
+    ),
+    highlightOptions = highlightOptions(
+      weight = 2,
+      opacity = 1
+    )
+  ) %>% 
+  addLegend(
+    data = k_12_students_pumas,
+    pal = pums_pal,
+    values = ~perc_has_internet,
+    title = "% individuals in<br>K-12 schools that have internet<br>in Santa Clara County"
+  )
+```
+
 ```{r B07009}
 acs_vars_2019_1yr <-
   listCensusMetadata(
@@ -363,27 +452,29 @@ scc_flows_19 <-
   pivot_wider(
     names_from = mobility,
     values_from = estimate
-  ) %>% 
+  ) %>%
   mutate(
     `External net` = Inflow - Outflow,
     `Internal net` = `Here this year` - `Here last year` - `External net`,
-  )
-
-educ_order <- c("Less than high school graduate",
-                "High school graduate (includes equivalency)",
-                "Some college or associate's degree",
-                "Bachelor's degree",
-                "Graduate or professional degree")
-scc_flows_19 %>% 
-  slice(match(educ_order, educational_attainment)) %>%
+    `Educational attainment` = educational_attainment %>% factor(levels = c(
+      "Less than high school graduate",
+      "High school graduate (includes equivalency)",
+      "Some college or associate's degree",
+      "Bachelor's degree",
+      "Graduate or professional degree"
+    ))
+  ) %>%
   select(
-    `Educational Attainment Level` = educational_attainment, 
+    `Educational attainment`,
     `Internal net`,
     `External net`,
-    `Here last year`, 
-    `Here this year`, 
-    Outflow, 
+    `Here last year`,
+    `Here this year`,
+    Outflow,
     Inflow
-  )
+  ) %>%
+  arrange(`Educational attainment`)
+
+scc_flows_19
 ```
 Internal net generally shows educational mobility within the Santa Clara County. External net generally shows migration into/out of Santa Clara County. Looking at internal net, it looks like there's a large decrease in amount of people getting bachelor's or graduate/professional degrees with a large increase in "less than high school graduate." This implies less high schoolers going to college and less college students going to graduate school. However, looking at external net, there's a super large increase in graduate or professional degree, which I would attribute to startups, companies, or universities (SCU or stanford) hiring or bringing in professionals.
