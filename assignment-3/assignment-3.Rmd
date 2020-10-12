@@ -1,0 +1,369 @@
+---
+title: "assignment 3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+```{r}
+library(censusapi)
+library(tidyverse)
+library(tidycensus)
+library(sf)
+library(tigris)
+library(leaflet)
+library(corrplot)
+
+census_api_key("c92c3c586ec2640e86f9d2e8d8b09b5a75f4ea16")
+Sys.setenv(CENSUS_KEY = "c92c3c586ec2640e86f9d2e8d8b09b5a75f4ea16")
+```
+```{r}
+acs_vars_2018_5yr <-
+  listCensusMetadata(
+    name = "2018/acs/acs5",
+    type = "variables"
+  )
+
+```
+```{r get_census_data}
+bay_native_poverty_tract <- 
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2018,
+    region = "tract:*",
+    regionin = "state:06+county:001,013,041,055,075,081,085,095,097",
+    vars = c(
+      "B17020_001E",
+      "B17020C_001E",
+      "B17020_002E"
+    )
+  ) %>% 
+  transmute(
+    tract = paste0(state, county, tract),
+    perc_native = B17020C_001E / B17020_001E,
+    poverty_rate = B17020_002E / B17020_001E
+  ) %>%
+  filter(
+    !is.na(perc_native),
+    !is.na(poverty_rate)
+  )
+
+```
+```{r native_poverty_regression}
+native_poverty_regression <-
+  ggplot(
+  data = bay_native_poverty_tract,
+  aes(
+      x = perc_native,
+      y = poverty_rate
+    )
+) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(
+    title = "percent native american vs poverty rate",
+    x = "percent native american",
+    y = "poverty rate"
+  )
+
+model_native_poverty <- 
+  lm(poverty_rate ~ perc_native , bay_native_poverty_tract)
+
+native_poverty_regression
+summary(model_native_poverty)
+```
+```{r get_pums, include = FALSE, eval = FALSE}
+pums_vars_2018 <-
+  pums_variables %>%
+  filter(year == 2018, survey == "acs5")
+
+saveRDS(pums_vars_2018, "pums_vars_2018.rds")
+
+# PUMA = geography
+# HHL = Household language
+#	HINCP = Household income
+# JWMNP = Travel time to work
+
+ca_pums <- get_pums(
+  variables = c(
+    "PUMA",
+    "HHL",
+    "HINCP",
+    'JWMNP'
+  ),
+  state = "CA",
+  year = 2018,
+  survey = "acs5",
+  recode = T
+)
+saveRDS(ca_pums, "ca_pums.rds")
+```
+```{r filter_bay_pums}
+ca_pums <- readRDS("ca_pums.rds")
+ca_pumas <-
+  pumas("CA", cb = T, progress_bar = F)
+
+bay_county_names <-
+  c(
+    "Alameda",
+    "Contra Costa",
+    "Marin",
+    "Napa",
+    "San Francisco",
+    "San Mateo",
+    "Santa Clara",
+    "Solano",
+    "Sonoma"
+  )
+
+bay_counties <-
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME %in% bay_county_names)
+
+bay_pumas <-
+  ca_pumas %>% 
+  st_centroid() %>% 
+  .[bay_counties, ] %>% 
+  st_set_geometry(NULL) %>% 
+  left_join(ca_pumas %>% select(GEOID10)) %>% 
+  st_as_sf()
+
+bay_pums <-
+  ca_pums %>% 
+  filter(PUMA %in% bay_pumas$PUMACE10)
+```
+```{r language_income_regression}
+language_income_regression <-
+  bay_pums %>% 
+  filter(SPORDER == 1) %>% 
+  mutate(
+    english_only = ifelse(
+      HHL_label == "English only",
+      1,
+      0
+    )
+  )
+
+ggplot(
+  data = language_income_regression,
+  aes(
+      x = english_only,
+      y = HINCP
+    )
+) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F) +
+  labs(
+    title = "English Speaking Households vs Household Income",
+    x = "English Speaking Household",
+    y = "Household Income"
+       )
+
+model_language_income <- lm(HINCP ~ english_only, language_income_regression, weights = WGTP)
+summary(model_language_income)
+```
+```{r traveltime_income_regression}
+traveltime_income_regression <-
+  bay_pums %>% 
+  filter(SPORDER == 1) %>% 
+  select(JWMNP, HINCP, WGTP) %>%
+  filter(HINCP != 0)
+  
+
+ggplot(
+  data = traveltime_income_regression,
+  aes(
+      x = JWMNP,
+      y = HINCP
+    )
+) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F) +
+  labs(
+    title = "Travel time to work vs household income",
+    x = "Travel time to work",
+    y = "Household income"
+       )
+
+model_traveltime_income <- lm(HINCP ~ JWMNP, traveltime_income_regression, weights = WGTP)
+summary(model_traveltime_income)
+```
+```{r traveltime_language_regression}
+traveltime_language_regression <-
+  bay_pums %>% 
+  filter(SPORDER == 1) %>% 
+  mutate(
+    english_only = ifelse(
+      HHL_label == "English only",
+      1,
+      0
+    )
+  )
+  
+
+ggplot(
+  data = traveltime_language_regression,
+  aes(
+      x = english_only,
+      y = JWMNP
+    )
+) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F) +
+  labs(
+    title = "English speaking household vs Travel time to work",
+    x = "English speaking household",
+    y = "Travel time to work"
+       )
+
+model_traveltime_income <- lm(JWMNP ~ english_only, traveltime_language_regression, weights = WGTP)
+summary(model_traveltime_income)
+```
+```{r multiple_regression}
+correlationplot <-
+  bay_pums %>% 
+  filter(SPORDER == 1) %>% 
+  mutate(
+    english_only = ifelse(
+      HHL_label == "English only",
+      1,
+      0
+    )
+  ) %>%
+  filter(HINCP != 0) %>%
+  select(
+    english_only,
+    HINCP,
+    JWMNP
+  ) %>%
+  cor()
+
+corrplot(
+  correlationplot,
+  method = "number",
+  type = "upper"
+)
+```
+Summary of all regressions above: 
+1) there is a positive correlation between english_only speaking households and household income (HINCP). However, the R^2 is .0008, and so there is a lot of variation and the regression doesn't tell us much. 
+2) surprisingly, there is a positive correlation between travel time to work and household income. The r^2 is .027, which is slightly better, but still doesn't give us much predictive power. 
+3) There is a negative correlation between english_only speaking households and commute time. However, again, the r^2 is .0038 which is extremely small and means there is a lot of variance.
+4) the multiple regression tells us that there is no dominant factor here which greater predictive power. All three variables are weakly correlated, and there is 0 relationship between commute time and household language.
+
+Is there a causal conclusion? No. the correlations are extremely weak, I can't even say there is a relevant correlation here. There is definitely no causality either.  
+
+Surprising finding: the weak positive correlation between travel time to work and household income. I expected those with lower incomes to have longer commute times. This expected result is highlighted in an article from the Brooking's institute. Perhaps it's something unique to the bay area, or perhaps it's just a faulty regression.
+
+```{r}
+bay_english_citizen_income_tract <- 
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2018,
+    region = "tract:*",
+    regionin = "state:06+county:001,013,041,055,075,081,085,095,097",
+    vars = c(
+      "B19001_001E",
+      "B19001_002E",
+      "B19001_003E",
+      "B19001_004E",
+      "B19001_005E",
+      "B19001_006E",
+      "C16002_001E",
+      "C16002_002E",
+      "B05001_001E",
+      "B05001_006E"
+    )
+  ) %>% 
+  transmute(
+    tract = paste0(state, county, tract),
+    perc_english_only = (C16002_002E / C16002_001E),
+    perc_under30k = (
+      B19001_002E +
+      B19001_003E +
+      B19001_004E +
+      B19001_005E +
+      B19001_006E 
+      ) / B19001_001E,
+    perc_not_citizen = (B05001_006E / B05001_001E)
+  ) %>%
+  filter(
+    !is.na(perc_english_only),
+    !is.na(perc_under30k)
+  )
+
+correlationplot_bay_english_citizen_income <-
+  bay_english_citizen_income_tract %>%
+  select(
+    perc_english_only,
+    perc_under30k,
+    perc_not_citizen
+  ) %>%
+  cor()
+
+corrplot(
+  correlationplot_bay_english_citizen_income,
+  method = "number",
+  type = "upper"
+)
+```
+The results of this correlation plot are much more interesting than the one above. Here, the results are: perc_not_citizen has greater predicative power than perc_english_only on perc_under30k. In essence, citizenship status predicts income better than language, or "controlling for citizenship status" there is less association between language and income. Additionally, there is a large correlation between citizenship status and language, which makes a lot of sense since non-citizens are oftentimes non-english speaking immigrants.
+```{r}
+acs_vars_2009_5yr <-
+  listCensusMetadata(
+    name = "2009/acs/acs5",
+    type = "variables"
+  )
+
+bay_english_citizen_income_tract_2009 <- 
+  getCensus(
+    name = "acs/acs5",
+    vintage = 2009,
+    region = "tract:*",
+    regionin = "state:06+county:001,013,041,055,075,081,085,095,097",
+    vars = c(
+      "B19001_001E",
+      "B19001_002E",
+      "B19001_003E",
+      "B19001_004E",
+      "B19001_005E",
+      "B19001_006E",
+      "B16002_001E",
+      "B16002_002E",
+      "B05001_001E",
+      "B05001_006E"
+    )
+  ) %>% 
+  transmute(
+    tract = paste0(state, county, tract),
+    perc_english_only = (B16002_002E / B16002_001E),
+    perc_under30k = (
+      B19001_002E +
+      B19001_003E +
+      B19001_004E +
+      B19001_005E +
+      B19001_006E 
+      ) / B19001_001E,
+    perc_not_citizen = (B05001_006E / B05001_001E)
+  ) %>%
+  filter(
+    !is.na(perc_english_only),
+    !is.na(perc_under30k)
+  )
+
+correlationplot_bay_english_citizen_income_2009 <-
+  bay_english_citizen_income_tract_2009 %>%
+  select(
+    perc_english_only,
+    perc_under30k,
+    perc_not_citizen
+  ) %>%
+  cor()
+
+corrplot(
+  correlationplot_bay_english_citizen_income_2009,
+  method = "number",
+  type = "upper"
+)
+```
+Looking at the census data from 2009, we can see similar results. Citizenship status is actually a greater predictor of income under 30k than in 2018, which implies that there are more jobs that pay over 30k nowadays for people w/o citizenship status in the bay area.  
