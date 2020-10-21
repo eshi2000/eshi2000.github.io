@@ -1,0 +1,166 @@
+---
+title: "assignment 4"
+output: html_document
+---
+Target: 
+In this assignment, I will conduct a difference-in-differences analysis of PM2.5 levels in Hayward, CA. The Russell City Energy Center is a power plant which began operating in August 2013 in Hayward, California, specifically in the zip code 94545. My hypothesis is that the opening of the power plant caused the PM2.5 levels to rise between 2013 and 2014.  
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+```{r}
+library(tigris)
+library(tidyverse)
+library(tidycensus)
+library(sf)
+library(leaflet)
+library(StatMatch)
+
+library(readxl)
+Sys.setenv(CENSUS_KEY = "c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+census_api_key("c8aa67e4086b4b5ce3a8717f59faa9a28f611dab")
+```
+
+```{r}
+ces2013 <- read_excel("ces2013.xls", sheet = 1) 
+ces2014 <- read_excel("ces2014.xlsx", sheet = 1) 
+
+ces2013_clean <-
+  ces2013 %>%
+  filter(
+    PM2.5 != "NA"
+  ) %>%
+  select(
+    `ZIP Code`,
+    PM2.5
+  ) %>%
+  rename(
+    "2013" = PM2.5
+  )
+
+ces2014_clean <-
+  ces2014 %>%
+  filter(
+    PM2.5 != "NA"
+  ) %>%
+  select(!`Census Tract`) %>%
+  group_by(ZIP) %>%
+  summarize(
+    PM2.5 = mean(unlist(PM2.5) %>% as.numeric())
+    ) %>%
+  rename(
+    "2014" = PM2.5
+  )
+  
+```
+```{r mahalanobis_match}
+obs_matrix_2013 <-
+  ces2013_clean %>% 
+  select(
+    `2013`
+  ) %>% 
+  sapply(as.numeric) %>%
+  as.matrix()
+
+dist_matrix <- mahalanobis.dist(obs_matrix_2013)
+rownames(dist_matrix) <- ces2013_clean$`ZIP Code`
+colnames(dist_matrix) <- ces2013_clean$`ZIP Code`
+
+match <- dist_matrix["94545",] %>% 
+  as.data.frame() %>% 
+  rownames_to_column() %>% 
+  rename(
+    `ZIP Code` = rowname,
+    match = "."
+  ) %>% 
+  sapply(as.numeric) %>%
+  as.data.frame() %>%
+  left_join(
+    ces2013_clean
+  ) %>%
+  left_join(
+    ces2014_clean,
+    by = c("ZIP Code" = "ZIP")
+  ) %>%
+  arrange(match) %>%
+  .[1:11, ] %>%
+  sapply(as.character) %>%
+  as.data.frame()
+
+```
+```{r}
+match_zips <-
+  match[-1,] %>% 
+  select(-match) %>%
+  pivot_longer(
+    -`ZIP Code`,
+    names_to = "year",
+    values_to = "PM2.5"
+  ) %>% group_by(
+    year
+  ) %>%
+  summarize(
+    `ZIP Code` = "Similar Zips",
+    PM2.5 = mean(PM2.5 %>% as.numeric())
+  )
+
+treatment_zip <-
+  match[1,] %>%
+  select(-match) %>%
+  pivot_longer(
+    -`ZIP Code`,
+    names_to = "year",
+    values_to = "PM2.5"
+  )
+```
+```{r}
+rbind(
+  treatment_zip,
+  match_zips
+) %>% 
+  mutate(
+    year = year %>% paste0(.,"-01-01") %>%  as.Date()
+  ) %>%
+  ggplot(
+    aes(
+      x = year,
+      y = PM2.5 %>% as.numeric(),
+      color = `ZIP Code`
+    )
+  ) +
+  geom_line() +
+  geom_vline(xintercept = 2014, linetype = "dashed") +
+  labs(
+    title = "94545 vs Control Zip Codes, PM2.5",
+    x = "Year",
+    y = "PM2.5"
+  )
+```
+Initial observations: PM2.5 levels decreased overall between the time where the data was collected in 2013 and 2014. They decreased more in the control zip codes, so it could be that the opening of the power plant is causing the PM2.5 level to decrease less.  
+
+```{r}
+pm_did <-
+  match %>% 
+  select(-match) %>% 
+  pivot_longer(
+    -`ZIP Code`,
+    names_to = "year",
+    values_to = "PM2.5"
+  ) %>% 
+  mutate(
+    year = year %>% as.numeric(),
+    time = ifelse(year == 2014, 1, 0),
+    treated = ifelse(`ZIP Code` == "94545", 1, 0)
+  )
+
+did_reg <- lm(PM2.5 ~ treated*time, data = pm_did)
+summary(did_reg)
+```
+Looking at the treated:time variable in the regression summary, the effect size is .8755 (PM2.5 increase) and the p-value is .15, which means we cannot reject the null hypothesis, and the effect of the power plant is not statistically significant.  
+some assumptions made:  
+1) I couldn't find dates for when the data is collected. I'm assuming the data was collected before the power plant started operating in 2013. This problem is just due to lack of data from before 2013.  
+2) I'm not very familiar with measurements of air quality, and which measurement a power plant would most likely affect. I chose PM2.5 sort of arbitrarily b/c it's most commonly used, but there are other measurements as well like diesel PM or Pollution burden that might have worked better.  
+3) Zip Codes are fairly large, and the geography might be too large to assess the effect of a singular power plant. It would be better to use census blocks as they provide more granularity  
+4) I chose 10 matching ZIPs using Mahalanobis distance, but this could have been a different number.
+5) I didn't match based on any other variables except 2013 PM2.5. It would be better to have more years (not possible b/c lack of data) or to use other air quality variables to pick the matching zip codes.
+
