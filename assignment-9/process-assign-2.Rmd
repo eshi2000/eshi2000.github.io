@@ -1,0 +1,336 @@
+---
+title: "assignment 2"
+output: 
+  html_document:
+    df_print: paged
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+options(tigris_use_cache = TRUE)
+```
+```{r libraries, include=FALSE}
+library(sf)
+library(tigris)
+library(leaflet)
+library(censusapi)
+library(tidyverse)
+library(tidycensus)
+
+census_api_key("c92c3c586ec2640e86f9d2e8d8b09b5a75f4ea16")
+Sys.setenv(CENSUS_KEY = "c92c3c586ec2640e86f9d2e8d8b09b5a75f4ea16")
+```
+```{r load_acs_data}
+acs_vars_2018_5yr <-
+  listCensusMetadata(
+    name = "2018/acs/acs5",
+    type = "variables"
+  )
+educ_attain_vars <-
+  acs_vars_2018_5yr %>%
+  filter(
+    str_detect(concept, "EDUCATIONAL ATTAINMENT") & 
+      str_detect(concept, "GEOGRAPHICAL MOBILITY")
+    )
+```
+```{r educ_race}
+census_race_labels <- c(
+  "White Alone",
+  "Black or African American",
+  "American Indian and Alaska Native Alone",
+  "Asian Alone",
+  "Native Hawaiian and Other Pacific Islander Alone)",
+  "Some Other Race Alone",
+  "Two or More Races"
+)
+
+scc_educ_attain <-
+  1:7 %>%
+  map_dfr(function(x){
+    getCensus(
+      name = "acs/acs5",
+      vintage = 2018,
+      region = "county:085",
+      regionin = "state:06",
+      vars = paste0("group(C15002",LETTERS[x],")")
+    ) %>%
+    select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+    pivot_longer(
+      ends_with("E"),
+      names_to = "variable",
+      values_to = "estimate"
+    ) %>%
+    left_join(
+      acs_vars_2018_5yr %>%
+        select(name, label),
+      by = c("variable" = "name")
+    ) %>%
+    select(-variable) %>%
+    separate(
+      label,
+      into = c(NA,NA,"sex","educational_attainment"),
+      sep = "!!"
+    ) %>% 
+    filter(!is.na(educational_attainment)) %>% 
+    mutate(race = census_race_labels[x])
+  })
+
+
+scc_race_total <-
+  scc_educ_attain %>% 
+  group_by(race) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  mutate(educational_attainment = "Total")
+
+saveRDS(scc_educ_attain, "scc_educ_attain.rds")
+saveRDS(scc_race_total, "scc_race_total.rds")
+```
+```{r get_santa_clara_pums, eval= FALSE}
+ca_pums <- get_pums(
+  variables = c(
+    "PUMA",
+    "ACCESS",
+    "SCHG"
+  ),
+  state = "CA",
+  year = 2018,
+  survey = "acs1",
+  recode = T
+)
+
+saveRDS(ca_pums, "ca_pums.rds")
+```
+```{r modify_pums_data, echo = F}
+ca_pums <- readRDS("ca_pums.rds")
+scc_geo <- 
+  counties("CA", cb = T, progress_bar = F) %>%
+  filter(NAME == "Santa Clara")
+ 
+ca_pumas <-
+  pumas("CA", cb = T, progress_bar = F)
+
+scc_pumas <-
+  ca_pumas %>% 
+  st_centroid() %>% 
+  .[scc_geo, ] %>% 
+  st_set_geometry(NULL) %>% 
+  left_join(ca_pumas %>% select(GEOID10)) %>% 
+  st_as_sf()
+
+scc_pums <-
+  ca_pums %>% 
+  filter(PUMA %in% scc_pumas$PUMACE10)
+
+```
+```{r pums_analysis}
+k_12_students <-
+  scc_pums %>%
+  filter(as.numeric(SCHG) %in% c(2:14)) %>%
+  filter(!(ACCESS_label == "N/A (GQ/vacant)")) %>%
+  select(c(ACCESS, SCHG, SCHG_label, ACCESS_label, PWGTP, PUMA)) %>%
+  mutate(
+    has_internet = ifelse(
+      as.numeric(ACCESS) %in% c(1,2),
+      PWGTP,
+      0
+    ),
+    no_internet = ifelse(
+      as.numeric(ACCESS) == 3,
+      PWGTP,
+      0
+    )
+  ) 
+
+total_num_k_12 = sum(k_12_students$PWGTP)
+num_has_internet = sum(k_12_students$has_internet)
+num_no_internet = sum(k_12_students$no_internet)
+perc_has_internet <- ((num_has_internet/total_num_k_12)*100) %>% round()
+perc_no_internet <- ((num_no_internet/total_num_k_12)*100) %>% round()
+
+```
+```{r pums_map}
+k_12_students_pumas <-
+  k_12_students %>%
+  group_by(PUMA) %>%
+  summarize(
+    has_internet = sum(has_internet),
+    no_internet = sum(no_internet),
+    PWGTP = sum(PWGTP)
+  ) %>%
+  mutate(
+    perc_has_internet = has_internet/PWGTP*100
+  ) %>% 
+  left_join(
+    scc_pumas %>%
+      select(PUMACE10),
+    by = c("PUMA" = "PUMACE10")
+    ) %>%
+  st_as_sf()
+
+saveRDS(k_12_students_pumas, "k_12_students_pumas.rds")
+```
+```{r B07009}
+acs_vars_2019_1yr <-
+  listCensusMetadata(
+    name = "2019/acs/acs1",
+    type = "variables"
+  )
+
+scc_mobility_current_19 <- 
+  getCensus(
+    name = "acs/acs1",
+    vintage = 2019,
+    region = "county:085",
+    regionin = "state:06",
+    vars = c("group(B07009)")
+  ) %>% 
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "variable",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_1yr %>% 
+      select(name, label), 
+    by = c("variable" = "name")
+  ) %>%
+  separate(
+    label,
+    into = c(NA,NA,"mobility", "educational_attainment"),
+    sep = "!!"
+  ) %>%
+  mutate(
+    mobility = ifelse(
+      mobility %in% c("Same house 1 year ago:", "Moved within same county:"),
+      "Here since last year",
+      "Inflow"
+    )
+  ) %>%
+  filter(
+    !(is.na(mobility)) & 
+      !(is.na(educational_attainment))
+    ) %>%
+  group_by(mobility, educational_attainment) %>%
+  summarize(estimate = sum(estimate))
+
+```
+```{r B07409}
+scc_mobility_lastyear_19 <- 
+  getCensus(
+    name = "acs/acs1",
+    vintage = 2019,
+    region = "county:085",
+    regionin = "state:06",
+    vars = c("group(B07409)")
+  ) %>% 
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "variable",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_1yr %>% 
+      select(name, label), 
+    by = c("variable" = "name")
+  ) %>%
+  separate(
+    label,
+    into = c(NA,NA,"mobility", "educational_attainment"),
+    sep = "!!"
+  ) %>%
+  mutate(
+    mobility = ifelse(
+      mobility %in% c("Same house:", "Moved within same county:"),
+      "Here since last year",
+      "Outflow"
+    )
+  ) %>%
+  filter(
+    !(is.na(mobility)) & 
+      !(is.na(educational_attainment))
+    ) %>%
+  group_by(mobility, educational_attainment) %>%
+  summarize(estimate = sum(estimate))
+```
+
+B07009 - GEOGRAPHICAL MOBILITY IN THE PAST YEAR BY EDUCATIONAL ATTAINMENT FOR CURRENT RESIDENCE IN THE UNITED STATES\  
+B07409 - GEOGRAPHICAL MOBILITY IN THE PAST YEAR BY EDUCATIONAL ATTAINMENT FOR RESIDENCE 1 YEAR AGO IN THE UNITED STATES\  
+```{r total_pop_18}
+scc_mobility_current_18 <- 
+  getCensus(
+    name = "acs/acs1",
+    vintage = 2018,
+    region = "county:085",
+    regionin = "state:06",
+    vars = c("group(B07009)")
+  ) %>% 
+  select(!c(GEO_ID,state,NAME) & !ends_with(c("EA","MA","M"))) %>%
+  pivot_longer(
+    ends_with("E"),
+    names_to = "variable",
+    values_to = "estimate"
+  ) %>%
+  left_join(
+    acs_vars_2019_1yr %>% 
+      select(name, label), 
+    by = c("variable" = "name")
+  ) %>% 
+  select(-variable) %>% 
+  separate(
+    label,
+    into = c(NA,NA,"mobility","educational_attainment"),
+    sep = "!!"
+  ) %>% 
+  mutate(
+    mobility = "Here last year"
+  ) %>% 
+  filter(
+    !(is.na(mobility)) & 
+      !(is.na(educational_attainment))
+    ) %>%
+  group_by(mobility, educational_attainment) %>%
+  summarize(estimate = sum(estimate))
+```
+
+```{r scc_flows}
+scc_flows_19 <-
+  rbind(
+    scc_mobility_current_18,
+    scc_mobility_lastyear_19 %>% 
+      filter(mobility == "Outflow"),
+    scc_mobility_current_19 %>% 
+      filter(mobility == "Inflow"),
+    scc_mobility_current_19 %>% 
+      group_by(educational_attainment) %>% 
+      summarize(estimate = sum(estimate)) %>% 
+      mutate(mobility = "Here this year")
+  ) %>% 
+  pivot_wider(
+    names_from = mobility,
+    values_from = estimate
+  ) %>%
+  mutate(
+    `External net` = Inflow - Outflow,
+    `Internal net` = `Here this year` - `Here last year` - `External net`,
+    `Educational attainment` = educational_attainment %>% factor(levels = c(
+      "Less than high school graduate",
+      "High school graduate (includes equivalency)",
+      "Some college or associate's degree",
+      "Bachelor's degree",
+      "Graduate or professional degree"
+    ))
+  ) %>%
+  select(
+    `Educational attainment`,
+    `Internal net`,
+    `External net`,
+    `Here last year`,
+    `Here this year`,
+    Outflow,
+    Inflow
+  ) %>%
+  arrange(`Educational attainment`)
+
+saveRDS(scc_flows_19, "scc_flows_19.rds")
+```

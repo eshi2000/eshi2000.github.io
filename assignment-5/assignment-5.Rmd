@@ -1,0 +1,24 @@
+---
+title: "assignment-5"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+```{r}
+library(mapboxapi)
+library(tidyverse)
+library(tigris)
+library(sf)
+library(leaflet)
+library(lehdr)
+library(censusapi)
+
+mb_access_token("sk.eyJ1IjoiZXNoaTIwMDAiLCJhIjoiY2tnbGtpejExMGxzOTJycG4zN2F1MHpxMSJ9.RXv9EL5SfIZBkXeaTt0v1Q", install = T, overwrite = T)
+readRenviron("~/.Renviron")
+```
+```{r}
+sfbi_data = read_csv("SFBI Database.csv")
+```
+

@@ -1,0 +1,130 @@
+---
+title: "assignment-9"
+output: 
+  flexdashboard::flex_dashboard
+---
+
+```{r global, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(leaflet)
+library(plotly)
+
+scc_educ_attain <- readRDS("scc_educ_attain.Rds")
+scc_race_total <- readRDS("scc_race_total.Rds")
+k_12_students_pumas <- readRDS("k_12_students_pumas.Rds")
+scc_flows_19 <- readRDS("scc_flows_19.Rds")
+```
+
+Column
+-----------------------------------------------------------------------
+
+### Percent in K-12 schools w/ Internet in Santa Clara County
+
+```{r}
+pums_pal <- colorNumeric(
+  palette = "Oranges",
+  domain = k_12_students_pumas$perc_has_internet
+)
+
+leaflet() %>%
+  addTiles() %>%
+  addPolygons(
+    data = k_12_students_pumas,
+    fillColor = ~pums_pal(perc_has_internet),
+    color = "white",
+    opacity = 0.5,
+    fillOpacity = 0.5,
+    weight = 1,
+    label = ~paste0(
+      round(perc_has_internet),
+      "% of individuals in K-12 schools have internet"
+    ),
+    highlightOptions = highlightOptions(
+      weight = 2,
+      opacity = 1
+    )
+  ) %>%
+  addLegend(
+    data = k_12_students_pumas,
+    pal = pums_pal,
+    values = ~perc_has_internet,
+    title = "% individuals in<br>K-12 schools that have internet<br>in Santa Clara County"
+  )
+```
+
+Column {.tabset}
+-----------------------------------------------------------------------
+
+### Educ and Race FILL
+
+```{r fig.width=8}
+scc_educ_attain %>%
+  group_by(educational_attainment, race) %>%
+  summarize(estimate = sum(estimate)) %>%
+  rbind(scc_race_total) %>%
+  ggplot() +
+  geom_bar(
+    aes(
+      x = educational_attainment %>%
+        factor(
+          levels =
+            rev(c("Total", scc_educ_attain$educational_attainment[1:4]))),
+      y = estimate,
+      fill = race
+    ),
+    stat = "identity",
+    position = "fill"
+  ) +
+  labs(
+    x = "Attainment Level",
+    y = "Proportion of People Over the Age of 25",
+    title = "Santa Clara County Educational Attainment by Race",
+    fill = "Race"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  )
+```
+
+### Educ and Race STACK
+
+```{r fig.width=8}
+scc_educ_attain %>%
+  group_by(educational_attainment, race) %>%
+  summarize(estimate = sum(estimate)) %>%
+  rbind(scc_race_total) %>%
+  ggplot() +
+  geom_bar(
+    aes(
+      x = educational_attainment %>%
+        factor(
+          levels =
+            rev(c("Total", scc_educ_attain$educational_attainment[1:4]))),
+      y = estimate,
+      fill = race
+    ),
+    stat = "identity",
+    position = "stack"
+  ) +
+  labs(
+    x = "Attainment Level",
+    y = "Proportion of People Over the Age of 25",
+    title = "Santa Clara County Educational Attainment by Race",
+    fill = "Race"
+  ) +
+  coord_flip() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical"
+  )
+```
+
+### Educ Migration Patterns in SCC
+
+```{r fig.width=8}
+knitr::kable(scc_flows_19)
+```
+
