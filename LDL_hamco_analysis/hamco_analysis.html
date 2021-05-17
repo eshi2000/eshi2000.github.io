@@ -382,8 +382,10 @@ print(old_appearances)</code></pre>
 ##   &lt;chr&gt;                &lt;int&gt;
 ## 1 N                      802
 ## 2 Y                      320</code></pre>
-<p>Old Summons Appearances<br />
-N:Y ratio = 802:320 = 2.5:1</p>
+<ol style="list-style-type: decimal">
+<li>Old Summons Appearances<br />
+N:Y ratio = 802:320 = 2.5:1</li>
+</ol>
 <pre class="r"><code># old summons judgements
 old_judgements &lt;-
   df %&gt;%
@@ -399,8 +401,10 @@ print(old_judgements)</code></pre>
 ## 2 DISMISSED                445
 ## 3 JUDGMENT FOR PLAINTIFF   114
 ## 4 &lt;NA&gt;                     562</code></pre>
-<p>Old Summons Judgements<br />
-Dismissed:Judgement:NA = 445:114:562 = 3.9:1:4.9</p>
+<ol start="2" style="list-style-type: decimal">
+<li>Old Summons Judgements<br />
+Dismissed:Judgement:NA = 445:114:562 = 3.9:1:4.9</li>
+</ol>
 <pre class="r"><code># new summons appearances
 new_appearances &lt;-
   df %&gt;%
@@ -414,8 +418,10 @@ print(new_appearances)</code></pre>
 ##   &lt;chr&gt;                &lt;int&gt;
 ## 1 N                     1487
 ## 2 Y                      656</code></pre>
-<p>New Summons Appearances<br />
-N:Y ratio = 1487:656 = 2.3:1</p>
+<ol start="3" style="list-style-type: decimal">
+<li>New Summons Appearances<br />
+N:Y ratio = 1487:656 = 2.3:1</li>
+</ol>
 <pre class="r"><code># new summons judgements
 new_judgements &lt;-
   df %&gt;%
@@ -431,8 +437,10 @@ print(new_judgements)</code></pre>
 ## 2 DISMISSED                769
 ## 3 JUDGMENT FOR PLAINTIFF   187
 ## 4 &lt;NA&gt;                    1181</code></pre>
-<p>New Summons Judgements<br />
-Dismissed:Judgement:NA = 769:187:1181 = 4.1:1:6.3</p>
+<ol start="4" style="list-style-type: decimal">
+<li>New Summons Judgements<br />
+Dismissed:Judgement:NA = 769:187:1181 = 4.1:1:6.3</li>
+</ol>
 <pre class="r"><code># attorney overall
 attorney_overall &lt;-
   df %&gt;%
@@ -442,8 +450,10 @@ print(paste0(&quot;has attorney: &quot;, colSums(!is.na(attorney_overall))))</co
 <pre><code>## [1] &quot;has attorney: 289&quot;</code></pre>
 <pre class="r"><code>print(paste0(&quot;doesn&#39;t have attorney: &quot;, colSums(is.na(attorney_overall))))</code></pre>
 <pre><code>## [1] &quot;doesn&#39;t have attorney: 2976&quot;</code></pre>
-<p>Overall Defendants who have attorney : don’t have one<br />
-289:2976 = 1:10.3</p>
+<ol start="5" style="list-style-type: decimal">
+<li>Overall Defendants who have attorney : don’t have one<br />
+289:2976 = 1:10.3</li>
+</ol>
 <pre class="r"><code># attorney old summons
 attorney_old &lt;-
   df %&gt;%
@@ -454,8 +464,10 @@ print(paste0(&quot;has attorney: &quot;, colSums(!is.na(attorney_old))))</code><
 <pre><code>## [1] &quot;has attorney: 88&quot;</code></pre>
 <pre class="r"><code>print(paste0(&quot;doesn&#39;t have attorney: &quot;, colSums(is.na(attorney_old))))</code></pre>
 <pre><code>## [1] &quot;doesn&#39;t have attorney: 1034&quot;</code></pre>
-<p>Old summons Defendants who have attorney : don’t have one<br />
-88:1034 = 1:11.8</p>
+<ol start="6" style="list-style-type: decimal">
+<li>Old summons Defendants who have attorney : don’t have one<br />
+88:1034 = 1:11.8</li>
+</ol>
 <pre class="r"><code># attorney new summons
 attorney_new &lt;-
   df %&gt;%
@@ -466,8 +478,10 @@ print(paste0(&quot;has attorney: &quot;, colSums(!is.na(attorney_new))))</code><
 <pre><code>## [1] &quot;has attorney: 201&quot;</code></pre>
 <pre class="r"><code>print(paste0(&quot;doesn&#39;t have attorney: &quot;, colSums(is.na(attorney_new))))</code></pre>
 <pre><code>## [1] &quot;doesn&#39;t have attorney: 1942&quot;</code></pre>
-<p>New summons Defendants who have attorney : don’t have one<br />
-201:1942 = 1:9.7</p>
+<ol start="7" style="list-style-type: decimal">
+<li>New summons Defendants who have attorney : don’t have one<br />
+201:1942 = 1:9.7</li>
+</ol>
 <pre class="r"><code># FTA&#39;d Dispositions
 fta_disposition &lt;-
   df %&gt;%
@@ -483,7 +497,9 @@ print(fta_disposition)</code></pre>
 ## 2 DISMISSED                987
 ## 3 JUDGMENT FOR PLAINTIFF   193
 ## 4 &lt;NA&gt;                    1103</code></pre>
-<p>When defendants FTA, the most common disposition is “NA” followed by “DISMISSED”</p>
+<ol start="8" style="list-style-type: decimal">
+<li>When defendants FTA, the most common disposition is “NA” followed by “DISMISSED”</li>
+</ol>
 
 
 
